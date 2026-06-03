@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💬 Chat Privado</title>
+    <style>
+        body { background: #0f0f12; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        
+        /* Pantalla de Login */
+        #login-box { background: #1e1e24; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); text-align: center; width: 85%; max-width: 350px; }
+        
+        /* Contenedor del Chat Principal */
+        #chat-box { display: none; width: 90%; max-width: 450px; height: 85vh; background: #1e1e24; border-radius: 16px; flex-direction: column; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+        
+        .header { background: #2a2a35; padding: 15px; font-weight: bold; text-align: center; border-bottom: 1px solid #333; font-size: 1.1em; color: #38bdf8; }
+        #monitor { flex-grow: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        
+        /* Burbujas de chat estilo moderno */
+        .burbuja { padding: 10px 14px; border-radius: 12px; max-width: 75%; width: fit-content; font-size: 0.95em; line-height: 1.4; }
+        .yo { background: #0284c7; color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
+        .otro { background: #334155; color: #f1f5f9; align-self: flex-start; border-bottom-left-radius: 2px; }
+        .meta { font-size: 0.7em; color: #94a3b8; margin-top: 4px; display: block; }
+        .user-name { font-weight: bold; font-size: 0.8em; color: #38bdf8; display: block; margin-bottom: 2px; }
+
+        .input-area { padding: 12px; background: #18181c; display: flex; gap: 8px; }
+        input { background: #2d2d39; border: none; padding: 12px; color: white; border-radius: 8px; font-size: 1em; flex-grow: 1; }
+        input:focus { outline: 2px solid #38bdf8; }
+        button { background: #0284c7; border: none; padding: 12px 20px; color: white; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        button:hover { background: #0369a1; }
+    </style>
+</head>
+<body>
+
+    <div id="login-box">
+        <h2 style="color: #38bdf8; margin-top:0;">🔐 Acceso Privado</h2>
+        <input type="text" id="nombreInput" placeholder="Tu Nombre" style="width:90%; margin-bottom:10px;"><br>
+        <input type="password" id="claveInput" placeholder="Contraseña Secreta" style="width:90%; margin-bottom:20px;"><br>
+        <button onclick="conectarAlChat()" style="width:96%;">Entrar al Chat</button>
+    </div>
+
+    <div id="chat-box">
+        <div class="header">🔒 CANAL ENCRIPTADO</div>
+        <div id="monitor"></div>
+        <div class="input-area">
+            <input type="text" id="msgInput" placeholder="Escribe un mensaje privado..." onkeypress="detectarEnter(event)">
+            <button onclick="enviarMensaje()">Enviar</button>
+        </div>
+    </div>
+
+    <script>
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const socket = new WebSocket(`${protocol}//${window.location.host}`);
+        
+        let miNombre = "";
+        let miClave = "";
+
+        socket.onmessage = (event) => {
+            const json = JSON.parse(event.data);
+
+            if (json.type === 'error') {
+                alert(json.texto);
+                location.reload();
+            } else if (json.type === 'history') {
+                // Si la clave fue correcta, el servidor manda el historial y abrimos el chat
+                document.getElementById('login-box').style.display = 'none';
+                document.getElementById('chat-box').style.display = 'flex';
+                
+                const monitor = document.getElementById('monitor');
+                monitor.innerHTML = '';
+                json.data.forEach(m => agregarBurbuja(m));
+            } else if (json.type === 'msg') {
+                // Nuevo mensaje recibido en tiempo real
+                agregarBurbuja(json.data);
+            }
+        };
+
+        function conectarAlChat() {
+            miNombre = document.getElementById('nombreInput').value.trim();
+            miClave = document.getElementById('claveInput').value.trim();
+
+            if (!miNombre || !miClave) {
+                alert("Por favor llena ambos campos");
+                return;
+            }
+
+            // Le pedimos al servidor loguearnos con la contraseña
+            socket.send(JSON.stringify({ type: 'login', clave: miClave }));
+        }
+
+        function agregarBurbuja(msg) {
+            const monitor = document.getElementById('monitor');
+            const div = document.createElement('div');
+            
+            const esMio = msg.remitente === miNombre;
+            div.className = `burbuja ${esMio ? 'yo' : 'otro'}`;
+            
+            div.innerHTML = `
+                ${!esMio ? `<span class="user-name">${msg.remitente}</span>` : ''}
+                <span>${msg.texto}</span>
+                <span class="meta">${msg.fecha}</span>
+            `;
+            
+            monitor.appendChild(div);
+            monitor.scrollTop = monitor.scrollHeight;
+        }
+
+        function enviarMensaje() {
+            const input = document.getElementById('msgInput');
+            const texto = input.value.trim();
+
+            if (texto) {
+                socket.send(JSON.stringify({
+                    type: 'msg',
+                    clave: miClave,
+                    nombre: miNombre,
+                    texto: texto
+                }));
+                input.value = '';
+            }
+        }
+
+        function detectarEnter(e) {
+            if (e.key === 'Enter') enviarMensaje();
+        }
+    </script>
+</body>
+</html>
